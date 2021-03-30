@@ -34,17 +34,23 @@ def Uj_Mj(Mj,T0=293):
 
 def convertPIV(Mj,FolderIn,outfilename):
     #== Reorganize the mean PIV fields to get the interpolation grid
-    data,dict_grid = pivFunctions.getPIV_AvgRms(folderAvg+'/B00001_AvgV.vc7',
-                                            folderAvg+'/B00002_StdDevV.vc7')
+    # get the grid from the average data
+    stitchGrid_dict = pivFunctions.create_StitchGrid(folderAvg+'/B00001_AvgV.vc7',1200,501)
+    dataMean = pivFunctions.stitchPIV(folderAvg+'/B00001_AvgV.vc7',stitchGrid_dict)
+    dataRMS  = pivFunctions.stitchPIV(folderAvg+'/B00002_StdDevV.vc7',stitchGrid_dict)
 
-    x = np.tile(data["X"],data["Y"].size)
-    y = data["Y"].repeat(data["X"].size)
+
+
+    x = np.tile(dataMean["X"],dataMean["Y"].size)
+    y = dataMean["Y"].repeat(dataMean["X"].size)
     dataout = np.vstack((x.flatten()/10, \
                        y.flatten()/10, \
-                       data["Um"].flatten(),\
-                       data["Vm"].flatten(),\
-                       data["Urms"].flatten(),
-                       data["Vrms"].flatten())).T
+                       dataMean["U"].flatten(),\
+                       dataMean["V"].flatten(),\
+                       dataRMS["U"].flatten(),
+                       dataRMS["V"].flatten())).T
+
+    print(dataout.shape)
 
     np.savetxt(outfilename,
                dataout, fmt='%.6e',

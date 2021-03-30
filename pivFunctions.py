@@ -10,7 +10,8 @@ from scipy.interpolate import interp2d,interp1d
 from scipy.optimize import minimize
 from scipy.ndimage  import rotate
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
+from math import atan2,pi
 
 #============================================================
 # High level functions
@@ -289,8 +290,8 @@ def arrange_PIV(u1,v1,u2,v2,grid_dict):
     #put everything in a dict()
     return {'X':x_int,
             'Y':y_int,
-            'Um':U_rot,
-            'Vm':V_rot}
+            'U':U_rot,
+            'V':V_rot}
 
 #========================================================
 def interpolPIV(x_int,y_int, x1,y1,u1, x2,y2,u2,Dx):
