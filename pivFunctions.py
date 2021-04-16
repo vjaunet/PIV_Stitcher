@@ -22,10 +22,10 @@ def create_StitchGrid(file_name,nx_int=1200,ny_int=501):
         For example, call create_StitchGrid() on average values
         and call stitchPIV() on instantaneous data.
     """
-    # read the vc7 file
+    #=== read the vc7 file
     x1,y1,u1,v1,x2,y2,u2,v2,buff= readPIVvc7(file_name)
 
-    # Find rotation and trasnlation in vertical 
+    #=== Find rotation and trasnlation in vertical 
     # direction on both PIV fields
     alpha1,y0 = rotatePIV(x1,y1,u1)
     y1 = y1 - y0
@@ -34,8 +34,28 @@ def create_StitchGrid(file_name,nx_int=1200,ny_int=501):
     alpha2,y0 = rotatePIV(x2,y2,u2)
     y2 = y2 - y0
     print("Camera2: alpha=",alpha2,"Delta_y=",y0)
+ 
+    #=== find Dx between first and second field
+     #rotate the PIVfields
+    u1 = rotate(u1,alpha1,reshape=False)
+    v1 = rotate(v1,alpha1,reshape=False)
+
+    u2 = rotate(u2,alpha2,reshape=False)
+    v2 = rotate(v2,alpha2,reshape=False)
+
+    # remove padded areas due to the rotation
+    x1_1=x1[0:-2]
+    u1=u1[:,0:-2]
+    v1=v1[:,0:-2]
+
+    x2_1=x2[1:-4]
+    u2=u2[:,1:-4]
+    v2=v2[:,1:-4]
     
-    # Creation of the interpolation grid
+    Dx = translatePIV(x1_1,y1,u1,x2_1,y2,u2)
+    print("Dx =",Dx)
+
+    #=== Creation of the interpolation grid
     x_int = np.linspace(x1[0],x2[-1],nx_int)
     ydeb= -min(abs(y1[0]),abs(y1[-1]))
     yfin= -ydeb
@@ -44,7 +64,7 @@ def create_StitchGrid(file_name,nx_int=1200,ny_int=501):
     return { 'Xint':x_int,'Yint':y_int,
              'x1':x1,'y1':y1,
              'x2':x2,'y2':y2,
-             'alpha1':alpha1,'alpha2':alpha2}
+             'alpha1':alpha1,'alpha2':alpha2, 'Dx':Dx}
 
 
 def stitchPIV(file_name,stitchPIV_grid_dict):
@@ -52,7 +72,7 @@ def stitchPIV(file_name,stitchPIV_grid_dict):
         Stitching process using a grid defined by using 
         the create_StitchGrid() function     
     """
-    u1,v1,u2,v2=readPIV_fieldsOnly(file_name)
+    u1,v1,u2,v2=readPIVvc7_fieldsOnly(file_name)
     dict_mean = arrange_PIV(u1,v1,u2,v2,stitchPIV_grid_dict)
     return dict_mean
 
@@ -70,7 +90,7 @@ def readPIVvc7(filename):
     ##############################################################
 
     buff, piv_atts=  ReadIM.extra.get_Buffer_andAttributeList(filename)
-    u1,v1,u2,v2 = readPIV_fieldsOnly(filename)
+    u1,v1,u2,v2 = readPIVvc7_fieldsOnly(filename)
 
     #create the grids
     x1=np.linspace(buff.scaleY.offset +
@@ -96,7 +116,7 @@ def readPIVvc7(filename):
 
     elif buff.nf == 2:
 
-        #New Davis 10 procedure for storing data.
+        #New Davis 10 procedure for storing average data.
         x2 = x1
         y2 = y1    
         
@@ -121,10 +141,10 @@ def readPIVvc7(filename):
         return (x1, y1, u1, v1,
                 x2, y2, u2, v2, buff)
 
-def readPIV_fieldsOnly(filename):
+def readPIVvc7_fieldsOnly(filename):
     """  
             Read the vc7 file
-                return Velocity only 
+            return Velocity only 
     """
     buff, piv_atts=  ReadIM.extra.get_Buffer_andAttributeList(filename)
     data, buff = ReadIM.extra.buffer_as_array(buff)
@@ -157,10 +177,15 @@ def readPIV_fieldsOnly(filename):
     return (u1,v1,u2,v2)
 
 def read_INSTPIV_fieldsOnly(filename):
-    # read the vc7 file
+    """ read the vc7 file
+        for Davis version lower than Davis 10
+    """ 
     buff, piv_atts=  ReadIM.extra.get_Buffer_andAttributeList(filename)
-    data, buff = ReadIM.extra.buffer_as_array(buff)
+    data,_ = ReadIM.extra.buffer_as_array(buff)
 
+    if (data.shape[0]<=buff.nf*2):
+        raise ValueError('Davis data format not supported by this routine. Try readPIVvc7')
+        
     # get the velocity - Frame 1
     # we discard the choices > 3 that correspond to secondary peaks.
     choices = np.where(data[0] > 3, 3, data[0])
@@ -184,7 +209,7 @@ def read_INSTPIV_fieldsOnly(filename):
     for (i,j),choice in np.ndenumerate(choices):
         u2[i,j]=np.sum(data[11:2*int(choice)+11:2][:,i,j])*buff.scaleI.factor
         v2[i,j]=np.sum(data[12:2*int(choice)+12:2][:,i,j])*buff.scaleI.factor
-
+            
     ReadIM.DestroyBuffer(buff)
     ReadIM.DestroyAttributeListSafe(piv_atts)
 
@@ -253,7 +278,8 @@ def arrange_PIV(u1,v1,u2,v2,grid_dict):
     y2 = grid_dict["y2"]
     alpha1 = grid_dict["alpha1"]
     alpha2 = grid_dict["alpha2"]
-
+    Dx = grid_dict["Dx"]
+    
     #rotate the PIVfields
     u1 = rotate(u1,alpha1,reshape=False)
     v1 = rotate(v1,alpha1,reshape=False)
@@ -269,11 +295,6 @@ def arrange_PIV(u1,v1,u2,v2,grid_dict):
     x2=x2[1:-4]
     u2=u2[:,1:-4]
     v2=v2[:,1:-4]
-
-    #find Dx between first and second field
-    Dx = translatePIV(x1,y1,u1,x2,y2,u2)
-    #Dx =0
-    print("Dx =",Dx)
     
     U_rot=interpolPIV(x_int,y_int,
                       x1,y1,u1,
@@ -283,9 +304,9 @@ def arrange_PIV(u1,v1,u2,v2,grid_dict):
                       x2,y2,v2,Dx)
 
     #removing last values if necessary
-    x_int=x_int[0:-1]
-    U_rot=U_rot[:,0:-1]
-    V_rot=V_rot[:,0:-1]
+    x_int=x_int[0:]
+    U_rot=U_rot[:,0:]
+    V_rot=V_rot[:,0:]
 
     #put everything in a dict()
     return {'X':x_int,
@@ -333,9 +354,6 @@ def resDxPIV(dx,x1,y1,u1,x2,y2,u2):
     f2d = interp2d(x2, y2, u2, kind='cubic')
     x_int = x1[-3:]
     u_int2 = f2d(x_int,y_int)
-    
-    #plt.figure()
-    #plt.plot(y_int,u_int1[:,1],y_int,u_int2[:,1])
 
     err = np.sum(abs(u_int1[:,:] - u_int2[:,:]))
     return err
