@@ -37,8 +37,6 @@ def convertPIV(Mj,FolderIn,outfilename):
     # get the grid from the average data
     stitchGrid_dict = pivFunctions.create_StitchGrid(folderAvg+'/B00001_AvgV.vc7',1200,501)
     dataMean = pivFunctions.stitchPIV(folderAvg+'/B00001_AvgV.vc7',stitchGrid_dict)
-    dataRMS  = pivFunctions.stitchPIV(folderAvg+'/B00002_StdDevV.vc7',stitchGrid_dict)
-
 
 
     x = np.tile(dataMean["X"],dataMean["Y"].size)
@@ -46,15 +44,13 @@ def convertPIV(Mj,FolderIn,outfilename):
     dataout = np.vstack((x.flatten()/10, \
                        y.flatten()/10, \
                        dataMean["U"].flatten(),\
-                       dataMean["V"].flatten(),\
-                       dataRMS["U"].flatten(),
-                       dataRMS["V"].flatten())).T
+                       dataMean["V"].flatten())).T
 
     print(dataout.shape)
 
     np.savetxt(outfilename,
                dataout, fmt='%.6e',
-               header='#x/D y/D U/Uj V/Uj Urms/Uj Vrms/Uj',
+               header='#x/D y/D U/Uj V/Uj',
                delimiter="\t")
 
     ## === end function convertPIV()
